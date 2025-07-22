@@ -47,7 +47,6 @@
             <th class="p-2">Word Part</th>
             <th class="p-2">Type</th>
             <th class="p-2">Meaning</th>
-            <th class="p-2">Example</th>
           </tr>
         </thead>
         <tbody id="resultsBody"></tbody>
@@ -65,8 +64,8 @@
   <script>
     const GOOGLE_API_KEY = 'AIzaSyAeldPQjVCTXOSpzoSGDf_hvuwllWwuIdI'; // Replace with your Google API key
     const SHEET_ID = '1jr9en0VmwZCjQ2wboRQJ8NuDFtxyWX2iRR3yZSJO7Rc'; // Replace with your Google Sheet ID
-    const DEEPSEEK_API_KEY = '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'; // Replace with your DeepSeek API key
-    const SHEET_RANGE = 'Sheet1!A1:C1000'; // Adjust to your sheet name and range
+    const DEEPSEEK_API_KEY = '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'; // Replace with your DeepSeek API key
+    const SHEET_RANGE = 'Sheet1!A1:C1000'; // Adjust to your sheet name and range (e.g., BiologyTerms!A1:C150)
 
     document.getElementById('searchButton').addEventListener('click', async () => {
       const term = document.getElementById('searchInput').value.trim().toLowerCase();
@@ -85,22 +84,22 @@
           return;
         }
 
-        const matchingRows = data.values.filter(row => row[3] && row[3].toLowerCase() === term);
+        // Filter rows where the Word Part partially matches the term
+        const matchingRows = data.values.filter(row => row[0] && term.includes(row[0].toLowerCase()));
         if (matchingRows.length === 0) {
-          showError('Term not found in database.');
+          showError('No matching word parts found for this term.');
           return;
         }
 
         const resultsBody = document.getElementById('resultsBody');
         resultsBody.innerHTML = '';
         matchingRows.forEach(row => {
-          const [wordPart, meaning, type, example] = row;
+          const [wordPart, meaning, type] = row;
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td class="p-2 border">${wordPart}</td>
             <td class="p-2 border">${type}</td>
             <td class="p-2 border">${meaning}</td>
-            <td class="p-2 border">${example}</td>
           `;
           resultsBody.appendChild(tr);
         });
