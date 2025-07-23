@@ -62,10 +62,7 @@
   </div>
 
   <script>
-    const GOOGLE_API_KEY = 'AIzaSyAeldPQjVCTXOSpzoSGDf_hvuwllWwuIdI'; // Replace with your Google API key
-    const SHEET_ID = '1jr9en0VmwZCjQ2wboRQJ8NuDFtxyWX2iRR3yZSJO7Rc'; // Replace with your Google Sheet ID
-    const DEEPSEEK_API_KEY = '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'; // Replace with your DeepSeek API key
-    const SHEET_RANGE = 'Sheet1!A1:C1000'; // Adjust to your sheet name and range (e.g., BiologyTerms!A1:C150)
+    const DEEPSEEK_API_KEY = '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'; // Replace with your DeepSeek API key
 
     document.getElementById('searchButton').addEventListener('click', async () => {
       const term = document.getElementById('searchInput').value.trim().toLowerCase();
@@ -75,38 +72,8 @@
       }
 
       try {
-        const response = await fetch(
-          `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${SHEET_RANGE}?key=${GOOGLE_API_KEY}`
-        );
-        const data = await response.json();
-        if (!data.values) {
-          showError('No data found in Google Sheet.');
-          return;
-        }
-
-        // Filter rows where the Word Part partially matches the term
-        const matchingRows = data.values.filter(row => row[0] && term.includes(row[0].toLowerCase()));
-        if (matchingRows.length === 0) {
-          showError('No matching word parts found for this term.');
-          return;
-        }
-
-        const resultsBody = document.getElementById('resultsBody');
-        resultsBody.innerHTML = '';
-        matchingRows.forEach(row => {
-          const [wordPart, meaning, type] = row;
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td class="p-2 border">${wordPart}</td>
-            <td class="p-2 border">${type}</td>
-            <td class="p-2 border">${meaning}</td>
-          `;
-          resultsBody.appendChild(tr);
-        });
-        document.getElementById('results').classList.remove('hidden');
-
-        const meanings = matchingRows.map(row => row[1]).join(' and ');
-        const combinedResponse = await fetch('https://api.deepseek.com/v1/completions', {
+        // Call DeepSeek API to break down term and get meanings
+        const response = await fetch('https://api.deepseek.com/v1/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -114,16 +81,64 @@
           },
           body: JSON.stringify({
             model: 'deepseek-r1',
-            prompt: `Combine these meanings into a simple, student-friendly sentence: ${meanings}. For the term: ${term}.`,
-            max_tokens: 50
+            prompt: `Break down the biology term "${term}" into its prefix, root, and suffix (if applicable). Provide the meaning of each part and a combined meaning in a simple, student-friendly sentence. Return the response in JSON format like:
+            {
+              "parts": [
+                {"wordPart": "prefix", "type": "prefix", "meaning": "meaning of prefix"},
+                {"wordPart": "root", "type": "root", "meaning": "meaning of root"},
+                {"wordPart": "suffix", "type": "suffix", "meaning": "meaning of suffix"}
+              ],
+              "combinedMeaning": "A simple sentence combining the meanings for ${term}."
+            }`,
+            max_tokens: 200
           })
         });
-        const combinedData = await combinedResponse.json();
-        const combinedText = combinedData.choices[0].text.trim();
-        document.getElementById('combinedText').textContent = combinedText;
-        document.getElementById('combinedMeaning').classList.remove('hidden');
+
+        if (!response.ok) {
+          throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        if (!data.choices || !data.choices[0] || !data.choices[0].text) {
+          throw new Error('Invalid response from DeepSeek API.');
+        }
+
+        // Parse the JSON response from DeepSeek
+        let result;
+        try {
+          result = JSON.parse(data.choices[0].text.trim());
+        } catch (e) {
+          throw new Error('Failed to parse DeepSeek API response.');
+        }
+
+        // Display word parts in table
+        const resultsBody = document.getElementById('resultsBody');
+        resultsBody.innerHTML = '';
+        if (!result.parts || result.parts.length === 0) {
+          showError('No word parts found for this term.');
+          return;
+        }
+
+        result.parts.forEach(part => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="p-2 border">${part.wordPart}</td>
+            <td class="p-2 border">${part.type}</td>
+            <td class="p-2 border">${part.meaning}</td>
+          `;
+          resultsBody.appendChild(tr);
+        });
+        document.getElementById('results').classList.remove('hidden');
+
+        // Display combined meaning
+        if (result.combinedMeaning) {
+          document.getElementById('combinedText').textContent = result.combinedMeaning;
+          document.getElementById('combinedMeaning').classList.remove('hidden');
+        } else {
+          document.getElementById('combinedMeaning').classList.add('hidden');
+        }
       } catch (error) {
-        showError('Error fetching data. Please try again.');
+        showError('Error fetching data from DeepSeek API. Please check your API key or try again.');
         console.error(error);
       }
     });
